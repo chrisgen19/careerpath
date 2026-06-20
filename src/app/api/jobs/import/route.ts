@@ -1,0 +1,63 @@
+import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getCurrentUser } from '@/lib/server-auth';
+import {
+  jobInclude,
+  serializeJob,
+  toScalarData,
+  toTaskCreate,
+  toStarStoryCreate,
+  type JobInput,
+} from '@/lib/jobs';
+
+/**
+ * POST /api/jobs/import — replace the current user's jobs with an imported
+ * backup (powers the "Import" button). Runs as a single transaction.
+ */
+export async function POST(req: Request) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  // Reject an empty array too: it would delete all of the user's jobs and
+  // replace them with nothing, silently wiping their pipeline.
+  if (!Array.isArray(body) || body.length === 0) {
+    return NextResponse.json({ error: 'Expected a non-empty array of jobs' }, { status: 400 });
+  }
+
+  const incoming = body as JobInput[];
+  const hasInvalidJob = incoming.some(
+    (job) => !job?.title || !job?.company || !job?.status || !job?.locationType,
+  );
+  if (hasInvalidJob) {
+    return NextResponse.json({ error: 'Invalid job payload in import data' }, { status: 400 });
+  }
+
+  await prisma.$transaction([
+    prisma.job.deleteMany({ where: { userId: user.id } }),
+    ...incoming.map((job) =>
+      prisma.job.create({
+        data: {
+          userId: user.id,
+          ...toScalarData(job),
+          tasks: { create: toTaskCreate(job) },
+          starStories: { create: toStarStoryCreate(job) },
+        },
+      }),
+    ),
+  ]);
+
+  const jobs = await prisma.job.findMany({
+    where: { userId: user.id },
+    include: jobInclude,
+    orderBy: { updatedAt: 'desc' },
+  });
+
+  return NextResponse.json(jobs.map(serializeJob));
+}

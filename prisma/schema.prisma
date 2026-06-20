@@ -1,0 +1,166 @@
+// Prisma schema for CareerPath
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// Better Auth tables (email/password + sessions)
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  jobs          Job[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("verification")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Application tables (per-user job tracker)
+// ─────────────────────────────────────────────────────────────
+
+enum JobStatus {
+  saved
+  applied
+  interviewing
+  offer
+  rejected
+}
+
+enum LocationType {
+  remote
+  hybrid
+  onsite
+}
+
+enum SubmissionMethod {
+  linkedin
+  indeed
+  website
+  referral
+  other
+}
+
+model Job {
+  id           String  @id @default(cuid())
+  userId       String
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title        String
+  company      String
+  status       JobStatus
+  appliedDate  String  @default("") // YYYY-MM-DD
+  location     String  @default("")
+  locationType LocationType
+
+  salary           String?
+  url              String?
+  resumeVersion    String?
+  notes            String?
+  submissionMethod SubmissionMethod?
+  portalEmail      String?
+  portalUrl        String?
+  jobDescription   String?
+
+  // Flattened single Contact (1:1)
+  contactName  String?
+  contactRole  String?
+  contactEmail String?
+  contactPhone String?
+
+  tasks       Task[]
+  starStories StarStory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("job")
+}
+
+model Task {
+  id        String  @id @default(cuid())
+  jobId     String
+  job       Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  title     String
+  completed Boolean @default(false)
+  dueDate   String? // YYYY-MM-DD
+
+  @@index([jobId])
+  @@map("task")
+}
+
+model StarStory {
+  id        String @id @default(cuid())
+  jobId     String
+  job       Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  title     String
+  situation String
+  task      String
+  action    String
+  result    String
+
+  @@index([jobId])
+  @@map("star_story")
+}

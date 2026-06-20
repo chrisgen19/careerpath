@@ -8,8 +8,10 @@ interface JobModalProps {
   isOpen: boolean;
   onClose: () => void;
   job?: Job; // If provided, we are editing
-  onSave: (jobData: Omit<Job, 'id' | 'updatedAt'> & { id?: string }) => void;
-  onDelete?: (id: string) => void;
+  onSave: (
+    jobData: Omit<Job, 'id' | 'updatedAt'> & { id?: string },
+  ) => Promise<boolean> | boolean;
+  onDelete?: (id: string) => Promise<boolean> | boolean;
 }
 
 export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: JobModalProps) {
@@ -57,10 +59,15 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
   const [newStarResult, setNewStarResult] = useState('');
   const [expandedStoryId, setExpandedStoryId] = useState<string | null>(null);
 
+  // Save / delete flow state
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   // Early return if modal is closed
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !company.trim()) {
       alert('Job Title and Company Name are required.');
@@ -96,8 +103,37 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
       jobData.id = job.id;
     }
 
-    onSave(jobData);
-    onClose();
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      const ok = await onSave(jobData);
+      if (ok) {
+        onClose();
+      } else {
+        setSaveError('Could not save your changes. Please try again.');
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!job || !onDelete) return;
+    if (!confirm(`Are you sure you want to remove your application for ${job.company}?`)) {
+      return;
+    }
+    setSaveError(null);
+    setIsDeleting(true);
+    try {
+      const ok = await onDelete(job.id);
+      if (ok) {
+        onClose();
+      } else {
+        setSaveError('Could not delete this application. Please try again.');
+      }
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Task operations
@@ -852,32 +888,34 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
             {job && onDelete && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Are you sure you want to remove your application for ${job.company}?`)) {
-                    onDelete(job.id);
-                    onClose();
-                  }
-                }}
-                className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-700"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Trash2 className="h-4 w-4" /> Delete Tracker
+                <Trash2 className="h-4 w-4" /> {isDeleting ? 'Deleting...' : 'Delete Tracker'}
               </button>
             )}
           </div>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer"
-            >
-              {job ? 'Save Changes' : 'Add Application'}
-            </button>
+          <div className="flex flex-col items-end gap-2">
+            {saveError && (
+              <p className="text-xs font-semibold text-red-600">{saveError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isSaving}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSaving ? 'Saving...' : job ? 'Save Changes' : 'Add Application'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
