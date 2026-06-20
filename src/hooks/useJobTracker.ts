@@ -166,10 +166,14 @@ export function useJobTracker() {
 
   /** Loads the bundled sample jobs into the current account. */
   const loadSamples = useCallback(async () => {
-    const res = await fetch('/api/jobs/seed', { method: 'POST' });
-    if (res.ok) {
-      setJobs(await res.json());
-    } else {
+    try {
+      const res = await fetch('/api/jobs/seed', { method: 'POST' });
+      if (res.ok) {
+        setJobs(await res.json());
+      } else {
+        await refetch();
+      }
+    } catch {
       await refetch();
     }
   }, [refetch]);
@@ -187,15 +191,19 @@ export function useJobTracker() {
     );
     if (!isValid) return false;
 
-    const res = await fetch('/api/jobs/import', {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(importedJobs),
-    });
-    if (!res.ok) return false;
+    try {
+      const res = await fetch('/api/jobs/import', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(importedJobs),
+      });
+      if (!res.ok) return false;
 
-    setJobs(await res.json());
-    return true;
+      setJobs(await res.json());
+      return true;
+    } catch {
+      return false;
+    }
   }, []);
 
   // Derive stats
