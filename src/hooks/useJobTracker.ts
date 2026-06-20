@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Job, JobStatus, DashboardStats } from '../types';
 
 type JobInput = Omit<Job, 'id' | 'updatedAt'>;
@@ -15,10 +16,15 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 export function useJobTracker() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const router = useRouter();
 
   const refetch = useCallback(async () => {
     try {
       const res = await fetch('/api/jobs');
+      if (res.status === 401) {
+        router.replace('/login');
+        return;
+      }
       if (res.ok) {
         setJobs(await res.json());
       }
@@ -27,7 +33,7 @@ export function useJobTracker() {
     } finally {
       setIsLoaded(true);
     }
-  }, []);
+  }, [router]);
 
   // Initial load — state is set after `await`, never synchronously in the effect body.
   useEffect(() => {
@@ -35,19 +41,26 @@ export function useJobTracker() {
     (async () => {
       try {
         const res = await fetch('/api/jobs');
-        if (res.ok && !cancelled) {
+        if (cancelled) return;
+        if (res.status === 401) {
+          // Stale/invalid session cookie — bounce to login instead of rendering
+          // an empty dashboard. Keep the loading screen up during the redirect.
+          router.replace('/login');
+          return;
+        }
+        if (res.ok) {
           setJobs(await res.json());
         }
+        setIsLoaded(true);
       } catch {
         // Keep current state on transient network errors.
-      } finally {
         if (!cancelled) setIsLoaded(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [router]);
 
   const addJob = useCallback(
     async (jobInput: JobInput): Promise<Job | null> => {
@@ -96,7 +109,7 @@ export function useJobTracker() {
   );
 
   const deleteJob = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<boolean> => {
       // Snapshot the job so we can restore it if the delete fails — more reliable
       // than refetch(), which itself can fail (e.g. an expired session).
       const previous = jobs.find((job) => job.id === id);
@@ -110,9 +123,14 @@ export function useJobTracker() {
 
       try {
         const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
-        if (!res.ok) restore();
+        if (!res.ok) {
+          restore();
+          return false;
+        }
+        return true;
       } catch {
         restore();
+        return false;
       }
     },
     [jobs],
@@ -135,9 +153,15 @@ export function useJobTracker() {
       // Optimistic move so drag-and-drop feels instant.
       setJobs((prev) => prev.map((job) => (job.id === jobId ? patched : job)));
 
-      // Roll the single card back to its previous value on failure.
+      // Roll the single card back to its previous value on failure — but only if
+      // it's still on the status we set, so a newer move (which already
+      // superseded this one) isn't clobbered by a late failure.
       const rollback = () =>
-        setJobs((prev) => prev.map((job) => (job.id === jobId ? current : job)));
+        setJobs((prev) =>
+          prev.map((job) =>
+            job.id === jobId && job.status === patched.status ? current : job,
+          ),
+        );
 
       try {
         const res = await fetch(`/api/jobs/${jobId}`, {

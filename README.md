@@ -65,7 +65,7 @@ npm install -g pnpm
    | --------------------- | -------------------------------------------------------- |
    | `DATABASE_URL`        | PostgreSQL connection string (e.g. `postgres://myuser:mypassword@localhost:5432/careerpath`) |
    | `BETTER_AUTH_SECRET`  | 32+ char random secret for signing sessions              |
-   | `BETTER_AUTH_URL`     | Base URL of the app (`http://localhost:3000` in dev)     |
+   | `BETTER_AUTH_URL`     | Base URL of the app (`http://localhost:3071` in dev)     |
    | `NEXT_PUBLIC_APP_URL` | Public base URL used by the Better Auth client           |
 
 4. Create the database and apply the schema:
@@ -79,7 +79,7 @@ npm install -g pnpm
    pnpm dev
    ```
 
-6. Open [http://localhost:3000](http://localhost:3000), then **register an account**. New accounts start empty — use the **Samples** button in the header to load example applications.
+6. Open [http://localhost:3071](http://localhost:3071), then **register an account**. New accounts start empty — use the **Samples** button in the header to load example applications.
 
 ### Database scripts
 

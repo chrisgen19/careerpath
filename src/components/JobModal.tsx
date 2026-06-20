@@ -11,7 +11,7 @@ interface JobModalProps {
   onSave: (
     jobData: Omit<Job, 'id' | 'updatedAt'> & { id?: string },
   ) => Promise<boolean> | boolean;
-  onDelete?: (id: string) => void;
+  onDelete?: (id: string) => Promise<boolean> | boolean;
 }
 
 export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: JobModalProps) {
@@ -59,8 +59,9 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
   const [newStarResult, setNewStarResult] = useState('');
   const [expandedStoryId, setExpandedStoryId] = useState<string | null>(null);
 
-  // Save flow state
+  // Save / delete flow state
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   // Early return if modal is closed
@@ -113,6 +114,25 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
       }
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!job || !onDelete) return;
+    if (!confirm(`Are you sure you want to remove your application for ${job.company}?`)) {
+      return;
+    }
+    setSaveError(null);
+    setIsDeleting(true);
+    try {
+      const ok = await onDelete(job.id);
+      if (ok) {
+        onClose();
+      } else {
+        setSaveError('Could not delete this application. Please try again.');
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -868,15 +888,11 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
             {job && onDelete && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm(`Are you sure you want to remove your application for ${job.company}?`)) {
-                    onDelete(job.id);
-                    onClose();
-                  }
-                }}
-                className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-700"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="flex items-center gap-1 text-sm font-semibold text-red-600 hover:text-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Trash2 className="h-4 w-4" /> Delete Tracker
+                <Trash2 className="h-4 w-4" /> {isDeleting ? 'Deleting...' : 'Delete Tracker'}
               </button>
             )}
           </div>
