@@ -180,7 +180,9 @@ export function useJobTracker() {
 
   /** Replaces all of the user's jobs with an imported backup. */
   const importData = useCallback(async (importedJobs: Job[]) => {
-    if (!Array.isArray(importedJobs)) return false;
+    // Reject empty/non-array payloads — importing `[]` would otherwise wipe
+    // every job for the user (deleteMany with no replacements).
+    if (!Array.isArray(importedJobs) || importedJobs.length === 0) return false;
 
     const isValid = importedJobs.every(
       (job) =>

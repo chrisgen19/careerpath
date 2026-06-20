@@ -25,8 +25,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  if (!Array.isArray(body)) {
-    return NextResponse.json({ error: 'Expected an array of jobs' }, { status: 400 });
+  // Reject an empty array too: it would delete all of the user's jobs and
+  // replace them with nothing, silently wiping their pipeline.
+  if (!Array.isArray(body) || body.length === 0) {
+    return NextResponse.json({ error: 'Expected a non-empty array of jobs' }, { status: 400 });
   }
 
   const incoming = body as JobInput[];
