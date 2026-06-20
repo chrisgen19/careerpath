@@ -16,6 +16,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 export function useJobTracker() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const router = useRouter();
 
   const refetch = useCallback(async () => {
@@ -27,9 +28,14 @@ export function useJobTracker() {
       }
       if (res.ok) {
         setJobs(await res.json());
+        setLoadError(false);
+      } else {
+        // Non-401 server error (e.g. DB unreachable) — surface it instead of
+        // silently rendering an empty dashboard.
+        setLoadError(true);
       }
     } catch {
-      // Keep current state on transient network errors.
+      setLoadError(true);
     } finally {
       setIsLoaded(true);
     }
@@ -50,11 +56,17 @@ export function useJobTracker() {
         }
         if (res.ok) {
           setJobs(await res.json());
+          setLoadError(false);
+        } else {
+          // Non-401 server error — surface it rather than an empty dashboard.
+          setLoadError(true);
         }
         setIsLoaded(true);
       } catch {
-        // Keep current state on transient network errors.
-        if (!cancelled) setIsLoaded(true);
+        if (!cancelled) {
+          setLoadError(true);
+          setIsLoaded(true);
+        }
       }
     })();
     return () => {
@@ -276,6 +288,8 @@ export function useJobTracker() {
   return {
     jobs,
     isLoaded,
+    loadError,
+    refetch,
     addJob,
     updateJob,
     deleteJob,

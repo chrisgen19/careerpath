@@ -10,12 +10,14 @@ import ListView from '../components/ListView';
 import AnalyticsView from '../components/AnalyticsView';
 import JobModal from '../components/JobModal';
 import { ViewMode, Job, JobStatus, LocationType } from '../types';
-import { Plus, Search, LayoutGrid, List, BarChart3, Download, Upload, Sparkles, LogOut, Briefcase } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, BarChart3, Download, Upload, Sparkles, LogOut, Briefcase, AlertTriangle, RotateCcw } from 'lucide-react';
 
 export default function Home() {
   const {
     jobs,
     isLoaded,
+    loadError,
+    refetch,
     addJob,
     updateJob,
     deleteJob,
@@ -185,6 +187,26 @@ export default function Home() {
           <span className="text-sm font-bold text-slate-500 tracking-wider">
             Loading dashboard...
           </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-center justify-center flex-1 h-screen bg-slate-50 px-6 text-center">
+        <div className="flex flex-col items-center gap-3 max-w-sm">
+          <AlertTriangle className="h-10 w-10 text-red-500" />
+          <h2 className="text-base font-bold text-slate-700">Couldn&apos;t load your applications</h2>
+          <p className="text-sm text-slate-500">
+            We couldn&apos;t reach the server. Check your connection and try again.
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-1 flex items-center gap-1.5 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-700 transition-colors cursor-pointer"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> Retry
+          </button>
         </div>
       </div>
     );
