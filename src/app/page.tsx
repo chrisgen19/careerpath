@@ -1,14 +1,16 @@
 'use client';
 
 import React, { useState, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useJobTracker } from '../hooks/useJobTracker';
+import { useSession, signOut } from '@/lib/auth-client';
 import StatsHeader from '../components/StatsHeader';
 import KanbanBoard from '../components/KanbanBoard';
 import ListView from '../components/ListView';
 import AnalyticsView from '../components/AnalyticsView';
 import JobModal from '../components/JobModal';
 import { ViewMode, Job, JobStatus, LocationType } from '../types';
-import { Plus, Search, LayoutGrid, List, BarChart3, Download, Upload, RotateCcw, Briefcase } from 'lucide-react';
+import { Plus, Search, LayoutGrid, List, BarChart3, Download, Upload, Sparkles, LogOut, Briefcase } from 'lucide-react';
 
 export default function Home() {
   const {
@@ -19,9 +21,18 @@ export default function Home() {
     deleteJob,
     moveJob,
     importData,
-    resetData,
+    loadSamples,
     stats,
   } = useJobTracker();
+
+  const router = useRouter();
+  const { data: session } = useSession();
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/login');
+    router.refresh();
+  };
 
   // Search & Filter state
   const [search, setSearch] = useState('');
@@ -96,10 +107,10 @@ export default function Home() {
     if (!file) return;
 
     const fileReader = new FileReader();
-    fileReader.onload = (event) => {
+    fileReader.onload = async (event) => {
       try {
         const parsedData = JSON.parse(event.target?.result as string);
-        const success = importData(parsedData);
+        const success = await importData(parsedData);
         if (success) {
           alert('Data backup successfully imported!');
         } else {
@@ -113,9 +124,9 @@ export default function Home() {
     e.target.value = ''; // Reset input
   };
 
-  const handleReset = () => {
-    if (confirm('Are you sure you want to restore the default sample data? This will overwrite your local changes.')) {
-      resetData();
+  const handleLoadSamples = () => {
+    if (confirm('Load the sample job applications into your account? They will be added to your current list.')) {
+      loadSamples();
     }
   };
 
@@ -215,11 +226,31 @@ export default function Home() {
               className="hidden"
             />
             <button
-              onClick={handleReset}
-              title="Reset to Sample Data"
-              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 sm:px-3 text-xs font-semibold text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all hover:shadow-xs cursor-pointer"
+              onClick={handleLoadSamples}
+              title="Load Sample Data"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 sm:px-3 text-xs font-semibold text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all hover:shadow-xs cursor-pointer"
             >
-              <RotateCcw className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Reset</span>
+              <Sparkles className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Samples</span>
+            </button>
+
+            {/* Divider */}
+            <div className="h-6 w-px bg-slate-200 mx-0.5" />
+
+            {/* Account / sign out */}
+            {session?.user?.name && (
+              <span
+                className="hidden md:inline max-w-[10rem] truncate text-xs font-semibold text-slate-500"
+                title={session.user.email}
+              >
+                {session.user.name}
+              </span>
+            )}
+            <button
+              onClick={handleSignOut}
+              title="Sign out"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 sm:px-3 text-xs font-semibold text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all hover:shadow-xs cursor-pointer"
+            >
+              <LogOut className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Sign out</span>
             </button>
           </div>
         </div>
@@ -351,7 +382,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-slate-100 bg-white py-6 mt-12 text-center text-xs text-slate-400 font-medium">
-        <p>© 2026 CareerPath Job Tracker. Fully persisted client-side in LocalStorage.</p>
+        <p>© 2026 CareerPath Job Tracker. Securely persisted per account in PostgreSQL.</p>
       </footer>
 
       {/* Main Job Application Detail Form Modal */}

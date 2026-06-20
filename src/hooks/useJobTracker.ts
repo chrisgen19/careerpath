@@ -1,121 +1,169 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Job, JobStatus, DashboardStats } from '../types';
-import { INITIAL_MOCK_JOBS } from '../mockData';
 
-const LOCAL_STORAGE_KEY = 'careerpath_jobs_data';
+type JobInput = Omit<Job, 'id' | 'updatedAt'>;
 
+const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
+
+/**
+ * API-backed job store. Loads the signed-in user's jobs from PostgreSQL and
+ * persists every change through the `/api/jobs` endpoints. Mutations update
+ * local state optimistically and self-heal via refetch on failure.
+ */
 export function useJobTracker() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load initial data
-  useEffect(() => {
-    const loadData = () => {
-      try {
-        const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (stored) {
-          setJobs(JSON.parse(stored));
-        } else {
-          // Seed with initial mock data
-          setJobs(INITIAL_MOCK_JOBS);
-          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(INITIAL_MOCK_JOBS));
-        }
-      } catch (e) {
-        console.error('Error loading data from localStorage', e);
-        setJobs(INITIAL_MOCK_JOBS);
-      } finally {
-        setIsLoaded(true);
+  const refetch = useCallback(async () => {
+    try {
+      const res = await fetch('/api/jobs');
+      if (res.ok) {
+        setJobs(await res.json());
       }
-    };
-
-    // Load data asynchronously to avoid synchronous setState inside render/effects warnings
-    const timer = setTimeout(loadData, 0);
-    return () => clearTimeout(timer);
+    } catch {
+      // Keep current state on transient network errors.
+    } finally {
+      setIsLoaded(true);
+    }
   }, []);
 
-  // Save to localStorage whenever jobs state changes
-  const saveJobs = (newJobs: Job[]) => {
-    setJobs(newJobs);
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(newJobs));
-    } catch (e) {
-      console.error('Error saving data to localStorage', e);
-    }
-  };
-
-  const addJob = (jobInput: Omit<Job, 'id' | 'updatedAt'>) => {
-    const newJob: Job = {
-      ...jobInput,
-      id: `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      updatedAt: new Date().toISOString(),
-    };
-    const updated = [newJob, ...jobs];
-    saveJobs(updated);
-    return newJob;
-  };
-
-  const updateJob = (updatedJob: Job) => {
-    const updated = jobs.map((job) => {
-      if (job.id === updatedJob.id) {
-        return {
-          ...updatedJob,
-          updatedAt: new Date().toISOString(),
-        };
-      }
-      return job;
-    });
-    saveJobs(updated);
-  };
-
-  const deleteJob = (id: string) => {
-    const updated = jobs.filter((job) => job.id !== id);
-    saveJobs(updated);
-  };
-
-  const moveJob = (jobId: string, newStatus: JobStatus) => {
-    const updated = jobs.map((job) => {
-      if (job.id === jobId) {
-        // If status changes to 'applied' and appliedDate is empty or default, update it to today's date
-        let appliedDate = job.appliedDate;
-        if (newStatus === 'applied' && (job.status === 'saved' || !job.appliedDate)) {
-          appliedDate = new Date().toISOString().split('T')[0];
+  // Initial load — state is set after `await`, never synchronously in the effect body.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/jobs');
+        if (res.ok && !cancelled) {
+          setJobs(await res.json());
         }
-        return {
-          ...job,
-          status: newStatus,
-          appliedDate,
-          updatedAt: new Date().toISOString(),
-        };
+      } catch {
+        // Keep current state on transient network errors.
+      } finally {
+        if (!cancelled) setIsLoaded(true);
       }
-      return job;
-    });
-    saveJobs(updated);
-  };
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const importData = (importedJobs: Job[]) => {
+  const addJob = useCallback(
+    async (jobInput: JobInput) => {
+      const res = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(jobInput),
+      });
+      if (!res.ok) {
+        await refetch();
+        return;
+      }
+      const created: Job = await res.json();
+      setJobs((prev) => [created, ...prev]);
+      return created;
+    },
+    [refetch],
+  );
+
+  const updateJob = useCallback(
+    async (updatedJob: Job) => {
+      const res = await fetch(`/api/jobs/${updatedJob.id}`, {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(updatedJob),
+      });
+      if (!res.ok) {
+        await refetch();
+        return;
+      }
+      const saved: Job = await res.json();
+      setJobs((prev) => prev.map((job) => (job.id === saved.id ? saved : job)));
+    },
+    [refetch],
+  );
+
+  const deleteJob = useCallback(
+    async (id: string) => {
+      // Optimistic removal
+      setJobs((prev) => prev.filter((job) => job.id !== id));
+      const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        await refetch();
+      }
+    },
+    [refetch],
+  );
+
+  const moveJob = useCallback(
+    async (jobId: string, newStatus: JobStatus) => {
+      let patched: Job | undefined;
+
+      // Optimistic move so drag-and-drop feels instant.
+      setJobs((prev) =>
+        prev.map((job) => {
+          if (job.id !== jobId) return job;
+          // When entering "applied" from "saved" (or with no date), stamp today.
+          let appliedDate = job.appliedDate;
+          if (newStatus === 'applied' && (job.status === 'saved' || !job.appliedDate)) {
+            appliedDate = new Date().toISOString().split('T')[0];
+          }
+          patched = { ...job, status: newStatus, appliedDate };
+          return patched;
+        }),
+      );
+
+      if (!patched) return;
+
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(patched),
+      });
+      if (!res.ok) {
+        await refetch();
+        return;
+      }
+      const saved: Job = await res.json();
+      setJobs((prev) => prev.map((job) => (job.id === saved.id ? saved : job)));
+    },
+    [refetch],
+  );
+
+  /** Loads the bundled sample jobs into the current account. */
+  const loadSamples = useCallback(async () => {
+    const res = await fetch('/api/jobs/seed', { method: 'POST' });
+    if (res.ok) {
+      setJobs(await res.json());
+    } else {
+      await refetch();
+    }
+  }, [refetch]);
+
+  /** Replaces all of the user's jobs with an imported backup. */
+  const importData = useCallback(async (importedJobs: Job[]) => {
     if (!Array.isArray(importedJobs)) return false;
-    
-    // Basic validation
+
     const isValid = importedJobs.every(
       (job) =>
         job.id &&
         typeof job.title === 'string' &&
         typeof job.company === 'string' &&
-        job.status
+        job.status,
     );
+    if (!isValid) return false;
 
-    if (isValid) {
-      saveJobs(importedJobs);
-      return true;
-    }
-    return false;
-  };
+    const res = await fetch('/api/jobs/import', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(importedJobs),
+    });
+    if (!res.ok) return false;
 
-  const resetData = () => {
-    saveJobs(INITIAL_MOCK_JOBS);
-  };
+    setJobs(await res.json());
+    return true;
+  }, []);
 
   // Derive stats
   const stats = useMemo<DashboardStats>(() => {
@@ -130,13 +178,13 @@ export function useJobTracker() {
     // Defined as (interviewing + offer + rejected) / (applied + interviewing + offer + rejected)
     const activeAppliedCount = appliedCount + interviewingCount + offerCount + rejectedCount;
     const respondedCount = interviewingCount + offerCount + rejectedCount;
-    
-    const responseRate = activeAppliedCount > 0 
-      ? Math.round((respondedCount / activeAppliedCount) * 100) 
+
+    const responseRate = activeAppliedCount > 0
+      ? Math.round((respondedCount / activeAppliedCount) * 100)
       : 0;
 
-    const offerRate = activeAppliedCount > 0 
-      ? Math.round((offerCount / activeAppliedCount) * 100) 
+    const offerRate = activeAppliedCount > 0
+      ? Math.round((offerCount / activeAppliedCount) * 100)
       : 0;
 
     // Count pending tasks across all jobs
@@ -166,7 +214,7 @@ export function useJobTracker() {
     deleteJob,
     moveJob,
     importData,
-    resetData,
+    loadSamples,
     stats,
   };
 }
