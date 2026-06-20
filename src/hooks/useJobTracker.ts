@@ -88,8 +88,13 @@ export function useJobTracker() {
     async (id: string) => {
       // Optimistic removal
       setJobs((prev) => prev.filter((job) => job.id !== id));
-      const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
-      if (!res.ok) {
+      try {
+        const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+        if (!res.ok) {
+          await refetch();
+        }
+      } catch {
+        // Reconcile if the request never reached the server (network/abort).
         await refetch();
       }
     },
@@ -98,37 +103,38 @@ export function useJobTracker() {
 
   const moveJob = useCallback(
     async (jobId: string, newStatus: JobStatus) => {
-      let patched: Job | undefined;
+      // Compute the patched job up-front from current state — never read a value
+      // assigned inside a setState updater (its execution timing isn't guaranteed).
+      const current = jobs.find((job) => job.id === jobId);
+      if (!current) return;
+
+      // When entering "applied" from "saved" (or with no date), stamp today.
+      let appliedDate = current.appliedDate;
+      if (newStatus === 'applied' && (current.status === 'saved' || !current.appliedDate)) {
+        appliedDate = new Date().toISOString().split('T')[0];
+      }
+      const patched: Job = { ...current, status: newStatus, appliedDate };
 
       // Optimistic move so drag-and-drop feels instant.
-      setJobs((prev) =>
-        prev.map((job) => {
-          if (job.id !== jobId) return job;
-          // When entering "applied" from "saved" (or with no date), stamp today.
-          let appliedDate = job.appliedDate;
-          if (newStatus === 'applied' && (job.status === 'saved' || !job.appliedDate)) {
-            appliedDate = new Date().toISOString().split('T')[0];
-          }
-          patched = { ...job, status: newStatus, appliedDate };
-          return patched;
-        }),
-      );
+      setJobs((prev) => prev.map((job) => (job.id === jobId ? patched : job)));
 
-      if (!patched) return;
-
-      const res = await fetch(`/api/jobs/${jobId}`, {
-        method: 'PATCH',
-        headers: JSON_HEADERS,
-        body: JSON.stringify(patched),
-      });
-      if (!res.ok) {
+      try {
+        const res = await fetch(`/api/jobs/${jobId}`, {
+          method: 'PATCH',
+          headers: JSON_HEADERS,
+          body: JSON.stringify(patched),
+        });
+        if (!res.ok) {
+          await refetch();
+          return;
+        }
+        const saved: Job = await res.json();
+        setJobs((prev) => prev.map((job) => (job.id === saved.id ? saved : job)));
+      } catch {
         await refetch();
-        return;
       }
-      const saved: Job = await res.json();
-      setJobs((prev) => prev.map((job) => (job.id === saved.id ? saved : job)));
     },
-    [refetch],
+    [jobs, refetch],
   );
 
   /** Loads the bundled sample jobs into the current account. */

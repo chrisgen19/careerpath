@@ -18,9 +18,23 @@ export async function POST(req: Request) {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const incoming = (await req.json()) as JobInput[];
-  if (!Array.isArray(incoming)) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  if (!Array.isArray(body)) {
     return NextResponse.json({ error: 'Expected an array of jobs' }, { status: 400 });
+  }
+
+  const incoming = body as JobInput[];
+  const hasInvalidJob = incoming.some(
+    (job) => !job?.title || !job?.company || !job?.status || !job?.locationType,
+  );
+  if (hasInvalidJob) {
+    return NextResponse.json({ error: 'Invalid job payload in import data' }, { status: 400 });
   }
 
   await prisma.$transaction([

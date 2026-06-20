@@ -29,22 +29,29 @@ export default function RegisterPage() {
       setError('Passwords do not match.');
       return;
     }
-
-    setIsLoading(true);
-    const { error: signUpError } = await authClient.signUp.email({
-      name: name.trim(),
-      email: email.trim(),
-      password,
-    });
-    setIsLoading(false);
-
-    if (signUpError) {
-      setError(signUpError.message ?? 'Could not create your account. Please try again.');
+    if (!name.trim()) {
+      setError('Please enter your full name.');
       return;
     }
 
-    router.push('/');
-    router.refresh();
+    setIsLoading(true);
+    try {
+      const { error: signUpError } = await authClient.signUp.email({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+      });
+      if (signUpError) {
+        setError(signUpError.message ?? 'Could not create your account. Please try again.');
+        return;
+      }
+      router.push('/');
+      router.refresh();
+    } catch {
+      setError('Could not create your account. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

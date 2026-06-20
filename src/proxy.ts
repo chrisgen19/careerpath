@@ -18,9 +18,9 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  if (sessionCookie && isAuthPage) {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
+  // NOTE: we intentionally do NOT redirect away from the auth pages based on raw
+  // cookie presence. A stale/revoked cookie would otherwise trap a user who can
+  // no longer reach /login. Confirmed-session redirects are handled in-app.
 
   return NextResponse.next();
 }

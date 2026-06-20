@@ -18,19 +18,22 @@ export default function LoginPage() {
     setError(null);
     setIsLoading(true);
 
-    const { error: signInError } = await authClient.signIn.email({
-      email: email.trim(),
-      password,
-    });
-    setIsLoading(false);
-
-    if (signInError) {
-      setError(signInError.message ?? 'Invalid email or password.');
-      return;
+    try {
+      const { error: signInError } = await authClient.signIn.email({
+        email: email.trim(),
+        password,
+      });
+      if (signInError) {
+        setError(signInError.message ?? 'Invalid email or password.');
+        return;
+      }
+      router.push('/');
+      router.refresh();
+    } catch {
+      setError('Unable to sign in right now. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-
-    router.push('/');
-    router.refresh();
   };
 
   return (
