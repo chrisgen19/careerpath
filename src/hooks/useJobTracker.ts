@@ -50,55 +50,72 @@ export function useJobTracker() {
   }, []);
 
   const addJob = useCallback(
-    async (jobInput: JobInput) => {
-      const res = await fetch('/api/jobs', {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify(jobInput),
-      });
-      if (!res.ok) {
+    async (jobInput: JobInput): Promise<Job | null> => {
+      try {
+        const res = await fetch('/api/jobs', {
+          method: 'POST',
+          headers: JSON_HEADERS,
+          body: JSON.stringify(jobInput),
+        });
+        if (!res.ok) {
+          await refetch();
+          return null;
+        }
+        const created: Job = await res.json();
+        setJobs((prev) => [created, ...prev]);
+        return created;
+      } catch {
         await refetch();
-        return;
+        return null;
       }
-      const created: Job = await res.json();
-      setJobs((prev) => [created, ...prev]);
-      return created;
     },
     [refetch],
   );
 
   const updateJob = useCallback(
-    async (updatedJob: Job) => {
-      const res = await fetch(`/api/jobs/${updatedJob.id}`, {
-        method: 'PATCH',
-        headers: JSON_HEADERS,
-        body: JSON.stringify(updatedJob),
-      });
-      if (!res.ok) {
+    async (updatedJob: Job): Promise<boolean> => {
+      try {
+        const res = await fetch(`/api/jobs/${updatedJob.id}`, {
+          method: 'PATCH',
+          headers: JSON_HEADERS,
+          body: JSON.stringify(updatedJob),
+        });
+        if (!res.ok) {
+          await refetch();
+          return false;
+        }
+        const saved: Job = await res.json();
+        setJobs((prev) => prev.map((job) => (job.id === saved.id ? saved : job)));
+        return true;
+      } catch {
         await refetch();
-        return;
+        return false;
       }
-      const saved: Job = await res.json();
-      setJobs((prev) => prev.map((job) => (job.id === saved.id ? saved : job)));
     },
     [refetch],
   );
 
   const deleteJob = useCallback(
     async (id: string) => {
-      // Optimistic removal
-      setJobs((prev) => prev.filter((job) => job.id !== id));
+      // Snapshot the job so we can restore it if the delete fails — more reliable
+      // than refetch(), which itself can fail (e.g. an expired session).
+      const previous = jobs.find((job) => job.id === id);
+      setJobs((prev) => prev.filter((job) => job.id !== id)); // optimistic removal
+
+      const restore = () => {
+        if (previous) {
+          setJobs((prev) => [previous, ...prev.filter((job) => job.id !== id)]);
+        }
+      };
+
       try {
         const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
-        if (!res.ok) {
-          await refetch();
-        }
+        if (!res.ok) restore();
       } catch {
-        // Reconcile if the request never reached the server (network/abort).
-        await refetch();
+        restore();
       }
     },
-    [refetch],
+    [jobs],
   );
 
   const moveJob = useCallback(
@@ -118,6 +135,10 @@ export function useJobTracker() {
       // Optimistic move so drag-and-drop feels instant.
       setJobs((prev) => prev.map((job) => (job.id === jobId ? patched : job)));
 
+      // Roll the single card back to its previous value on failure.
+      const rollback = () =>
+        setJobs((prev) => prev.map((job) => (job.id === jobId ? current : job)));
+
       try {
         const res = await fetch(`/api/jobs/${jobId}`, {
           method: 'PATCH',
@@ -125,16 +146,22 @@ export function useJobTracker() {
           body: JSON.stringify(patched),
         });
         if (!res.ok) {
-          await refetch();
+          rollback();
           return;
         }
         const saved: Job = await res.json();
-        setJobs((prev) => prev.map((job) => (job.id === saved.id ? saved : job)));
+        // Out-of-order guard: only apply the server row if the card is still on
+        // the status we just set, so a late response can't clobber a newer move.
+        setJobs((prev) =>
+          prev.map((job) =>
+            job.id === saved.id && job.status === patched.status ? saved : job,
+          ),
+        );
       } catch {
-        await refetch();
+        rollback();
       }
     },
-    [jobs, refetch],
+    [jobs],
   );
 
   /** Loads the bundled sample jobs into the current account. */

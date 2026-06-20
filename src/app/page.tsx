@@ -63,13 +63,16 @@ export default function Home() {
     setIsModalOpen(true);
   };
 
-  // Handle modal submit
-  const handleSaveJob = (jobData: Omit<Job, 'id' | 'updatedAt'> & { id?: string }) => {
+  // Handle modal submit. Returns whether the save persisted so the modal can
+  // stay open and surface an error instead of silently closing on failure.
+  const handleSaveJob = async (
+    jobData: Omit<Job, 'id' | 'updatedAt'> & { id?: string },
+  ): Promise<boolean> => {
     if (jobData.id) {
-      updateJob(jobData as Job);
-    } else {
-      addJob(jobData);
+      return updateJob(jobData as Job);
     }
+    const created = await addJob(jobData);
+    return created != null;
   };
 
   // Handle Sort Change

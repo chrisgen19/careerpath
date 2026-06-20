@@ -8,7 +8,9 @@ interface JobModalProps {
   isOpen: boolean;
   onClose: () => void;
   job?: Job; // If provided, we are editing
-  onSave: (jobData: Omit<Job, 'id' | 'updatedAt'> & { id?: string }) => void;
+  onSave: (
+    jobData: Omit<Job, 'id' | 'updatedAt'> & { id?: string },
+  ) => Promise<boolean> | boolean;
   onDelete?: (id: string) => void;
 }
 
@@ -57,10 +59,14 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
   const [newStarResult, setNewStarResult] = useState('');
   const [expandedStoryId, setExpandedStoryId] = useState<string | null>(null);
 
+  // Save flow state
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   // Early return if modal is closed
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !company.trim()) {
       alert('Job Title and Company Name are required.');
@@ -96,8 +102,18 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
       jobData.id = job.id;
     }
 
-    onSave(jobData);
-    onClose();
+    setSaveError(null);
+    setIsSaving(true);
+    try {
+      const ok = await onSave(jobData);
+      if (ok) {
+        onClose();
+      } else {
+        setSaveError('Could not save your changes. Please try again.');
+      }
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Task operations
@@ -864,20 +880,26 @@ export default function JobModal({ isOpen, onClose, job, onSave, onDelete }: Job
               </button>
             )}
           </div>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer"
-            >
-              {job ? 'Save Changes' : 'Add Application'}
-            </button>
+          <div className="flex flex-col items-end gap-2">
+            {saveError && (
+              <p className="text-xs font-semibold text-red-600">{saveError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isSaving}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSaving ? 'Saving...' : job ? 'Save Changes' : 'Add Application'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
