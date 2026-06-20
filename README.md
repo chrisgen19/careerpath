@@ -1,36 +1,71 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 💼 CareerPath — Minimalist Job Application Tracker
 
-## Getting Started
+**CareerPath** is a modern, responsive web application built with **Next.js** and **Tailwind CSS** designed to streamline the job hunt. Moving beyond clunky spreadsheets, it offers job seekers a centralized hub to track applications, practice behaviorial interviews, back up postings, and analyze market salaries.
 
-First, run the development server:
+It operates entirely client-side using **localStorage** for instant page loads, offline-friendly access, and zero database setup.
+
+---
+
+## 🌟 Key Features
+
+*   **📋 Kanban Board & List Views:** Move applications through pipeline stages (Bookmarked, Applied, Interviewing, Offered, Rejected) using a drag-and-drop board (powered by `@hello-pangea/dnd`) or standard sortable table list.
+*   **💡 STAR Interview Story Prep:** Formulate and save behavioral stories directly mapped to each application using the **Situation, Task, Action, Result** (STAR) methodology.
+*   **📊 Salary Range Analyzer:** Parses job description salaries and plots min, max, and average ranges on a visual gauge.
+*   **💾 Job Description Snapshots:** Store a local copy of job descriptions to prevent loss of reference details when listings are deleted by companies.
+*   **🔐 Credentials & Portal Tracker:** Log application portals (LinkedIn, Indeed, direct referral) and track Workday/Lever login credentials.
+*   **📈 SVG Analytics Dashboard:** Visual summaries of your pipeline progress, channels, and compensation distributions.
+*   **📱 Mobile-First Responsive UX:** Fully-responsive viewport scaling featuring bottom tab navigation, swipeable sheets, and touch-friendly interactive elements.
+
+---
+
+## 🛠️ Tech Stack
+
+*   **Framework:** [Next.js](https://nextjs.org/) (App Router, React 19, TypeScript)
+*   **Styling:** [Tailwind CSS](https://tailwindcss.com/) (v4) & Roboto Google Font
+*   **Icons:** [Lucide React](https://lucide.dev/)
+*   **Drag & Drop:** `@hello-pangea/dnd`
+*   **Persistence:** HTML5 LocalStorage API
+*   **Package Manager:** [pnpm](https://pnpm.io/)
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+Make sure you have **Node.js** (v18+) and **pnpm** installed:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install -g pnpm
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/chrisgen19/careerpath.git
+   cd careerpath
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+2. Install dependencies:
+   ```bash
+   pnpm install
+   ```
 
-## Learn More
+3. Start the local development server:
+   ```bash
+   pnpm dev
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+4. Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+---
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## 🏗️ Production Build
 
-## Deploy on Vercel
+To create an optimized production build:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+pnpm build
+pnpm start
+```
